@@ -1,0 +1,7 @@
+This document is inside a nested ZIP file.
+
+It should be extracted recursively by the backend system.
+
+Path: inner_zip/nested_document.txt
+
+This tests the recursive ZIP extraction functionality.

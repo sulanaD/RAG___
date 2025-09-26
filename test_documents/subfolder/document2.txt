@@ -1,0 +1,7 @@
+Another test document in a subfolder.
+
+This document should appear in the "subfolder" section when uploaded as part of a ZIP file.
+
+The frontend should organize this by folder structure.
+
+This demonstrates the folder organization feature.
