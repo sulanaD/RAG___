@@ -7,7 +7,7 @@ router = APIRouter(prefix="", tags=["summarize"])
 
 @router.get("/summarize-page/{chunk_id}", response_model=SummarizeResponse)
 def summarize_page(chunk_id: str):
-    row = supabase.table("app.doc_chunks") \
+    row = supabase.table("doc_chunks") \
         .select("doc_id, page_number, content") \
         .eq("id", chunk_id).single().execute().data
     if not row:

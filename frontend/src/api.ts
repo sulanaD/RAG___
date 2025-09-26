@@ -4,9 +4,6 @@ const API_BASE_URL = 'http://127.0.0.1:8000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 });
 
 export interface UploadResponse {
@@ -61,11 +58,8 @@ export const apiService = {
     const formData = new FormData();
     formData.append('file', file);
     
-    const response = await api.post('/upload-zip', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    // Let the browser set the Content-Type (including multipart boundary)
+    const response = await api.post('/upload-zip', formData);
     
     return response.data;
   },

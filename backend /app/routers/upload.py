@@ -1,7 +1,7 @@
 from pathlib import Path
 import tempfile
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from app.db.supabase_client import insert_document, insert_chunks, update_page_count, supabase, mock_chunks, HAS_REAL_DB, CHUNKS_TABLE
+from app.db.supabase_client import insert_document, insert_chunks, update_page_count, supabase, CHUNKS_TABLE
 from app.services.utils_zip import extract_zip_recursive
 from app.services.parsing import iter_pages_for_file
 from app.services.ai import embed, gen_title
@@ -53,29 +53,17 @@ async def upload_zip(file: UploadFile = File(...)):
         insert_chunks(staged_rows)
         update_page_count(doc_id, page_count)
 
-        # Retrieve the processed chunks - use mock data if needed
-        if HAS_REAL_DB and supabase:
-            q = supabase.table(CHUNKS_TABLE) \
-                .select("id, source_path, page_number, content->>title") \
-                .eq("doc_id", doc_id).order("page_number", desc=False).execute()
-            
-            pages_index = [{
-                "chunk_id": r["id"],
-                "source_path": r["source_path"],
-                "page_number": int(r["page_number"]),
-                "title": r["content->>title"]
-            } for r in (q.data or [])]
-        else:
-            # Use mock data
-            doc_chunks = [chunk for chunk in mock_chunks if chunk["doc_id"] == doc_id]
-            doc_chunks.sort(key=lambda x: x["page_number"])
-            
-            pages_index = [{
-                "chunk_id": chunk["id"],
-                "source_path": chunk["source_path"],
-                "page_number": int(chunk["page_number"]),
-                "title": chunk["content"].get("title", "Untitled")
-            } for chunk in doc_chunks]
+        # Retrieve the processed chunks from Supabase
+        q = supabase.table(CHUNKS_TABLE) \
+            .select("id, source_path, page_number, content->>title") \
+            .eq("doc_id", doc_id).order("page_number", desc=False).execute()
+        
+        pages_index = [{
+            "chunk_id": r["id"],
+            "source_path": r["source_path"],
+            "page_number": int(r["page_number"]),
+            "title": r.get("content->>title") or "Untitled"
+        } for r in (q.data or [])]
 
         return UploadZipResponse(
             doc_id=doc_id,

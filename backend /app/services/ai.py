@@ -24,13 +24,26 @@ def embed(texts: List[str]) -> List[List[float]]:
 
 def gen_title(page_text: str) -> str:
     if HAS_REAL_API_KEY and client:
-        sys = "Return only a concise factual title (<= 12 words). No extra text."
-        r = client.chat.completions.create(
-            model=OPENAI_MODEL_SUMMARY,
-            messages=[{"role":"system","content":sys},{"role":"user","content":page_text[:6000]}],
-            temperature=0.2
-        )
-        return (r.choices[0].message.content or "Untitled").strip().split("\n")[0]
+        # Keep the prompt small to reduce token usage: take the first 1200 chars
+        sys = "Return only a concise factual title (<= 10 words). No extra text. Reply with the title only."
+        prompt_text = page_text.strip()[:1200]
+        try:
+            r = client.chat.completions.create(
+                model=OPENAI_MODEL_SUMMARY,
+                messages=[{"role":"system","content":sys},{"role":"user","content":prompt_text}],
+                temperature=0.0,
+                max_tokens=24,
+            )
+            content = None
+            # new OpenAI client shapes may vary; be defensive
+            if hasattr(r, "choices") and r.choices:
+                content = getattr(r.choices[0].message, "content", None) or getattr(r.choices[0], "text", None)
+            if content:
+                return content.strip().split("\n")[0]
+        except Exception as e:
+            # Log the error and fall back to mock title to avoid crashing and to limit retries
+            print(f"⚠️ OpenAI title generation failed: {e}")
+            # Fall through to mock below
     else:
         # Mock title generation based on first words
         words = page_text.strip().split()[:8]
@@ -41,15 +54,24 @@ def gen_title(page_text: str) -> str:
 
 def page_summary(title: str, text: str, target_words: int = 140) -> str:
     if HAS_REAL_API_KEY and client:
-        sys = (f"Summarize the page factually in {target_words-30}–{target_words+30} words. "
+        # Limit the input text to the first ~4000 chars to reduce tokens
+        sys = (f"Summarize the page factually in {max(60, target_words-30)}–{target_words+30} words. "
                "Do not invent content; only use provided text.")
-        user = f"Title: {title or 'Untitled'}\n\nText:\n{text[:8000]}"
-        r = client.chat.completions.create(
-            model=OPENAI_MODEL_SUMMARY,
-            messages=[{"role":"system","content":sys},{"role":"user","content":user}],
-            temperature=0.2
-        )
-        return r.choices[0].message.content.strip()
+        user = f"Title: {title or 'Untitled'}\n\nText:\n{text.strip()[:4000]}"
+        try:
+            r = client.chat.completions.create(
+                model=OPENAI_MODEL_SUMMARY,
+                messages=[{"role":"system","content":sys},{"role":"user","content":user}],
+                temperature=0.2,
+                max_tokens=min(300, int(target_words * 2)),
+            )
+            # Defensive parsing of the response
+            if hasattr(r, "choices") and r.choices:
+                return getattr(r.choices[0].message, "content", None) or getattr(r.choices[0], "text", "").strip()
+        except Exception as e:
+            print(f"⚠️ OpenAI page_summary failed: {e}")
+            # fall back to mock summary
+            pass
     else:
         # Mock summary generation
         words = text.strip().split()
@@ -58,7 +80,14 @@ def page_summary(title: str, text: str, target_words: int = 140) -> str:
         summary_text = " ".join(words[:target_words])
         return f"{summary_text}... [Mock summary - add real OpenAI API key for full functionality]"
 
-def rag_answer(query: str, context_chunks: List[str]) -> str:
+def rag_answer(query: str, context_chunks: List[str], citations: List[dict] | None = None) -> str:
+    """
+    Generate a RAG-style answer from context_chunks. Optionally append a short mapping of
+    citation markers [p1], [p2], ... to page numbers / chunk ids supplied in `citations`.
+
+    citations: optional list of dicts with keys: page_number (int or None), chunk_id (str or None)
+    """
+    answer_text = None
     if HAS_REAL_API_KEY and client:
         sys = ("Answer using only the provided context. Cite with [p1], [p2] in order. "
                "If information is insufficient, say you don't know.")
@@ -69,13 +98,38 @@ def rag_answer(query: str, context_chunks: List[str]) -> str:
                       {"role":"user","content":f"Question: {query}\n\nContext:\n{ctx}"}],
             temperature=0.0
         )
-        return r.choices[0].message.content.strip()
-    else:
-        # Mock RAG answer
+        # Defensive parsing
+        try:
+            answer_text = getattr(r.choices[0].message, "content", None) or getattr(r.choices[0], "text", None)
+        except Exception:
+            answer_text = None
+
+    # Mock or fallback
+    if not answer_text:
         if not context_chunks:
-            return f"I don't have enough context to answer: {query} [Mock mode - add real OpenAI API key]"
-        
-        # Return first chunk with citation as mock answer
-        first_chunk = context_chunks[0][:200]
-        return f"Based on the available context: {first_chunk}... [p1] [Mock mode - add real OpenAI API key for full functionality]"
+            answer_text = f"I don't have enough context to answer: {query} [Mock mode - add real OpenAI API key]"
+        else:
+            first_chunk = context_chunks[0][:200]
+            answer_text = f"Based on the available context: {first_chunk}... [p1] [Mock mode - add real OpenAI API key for full functionality]"
+
+    answer_text = answer_text.strip()
+
+    # Append a short, explicit mapping of citation markers to page numbers/chunk ids when provided.
+    if citations:
+        lines = ["\n\nSources:"]
+        for i, c in enumerate(citations, 1):
+            parts = []
+            page = c.get("page_number") if isinstance(c, dict) else None
+            cid = c.get("chunk_id") if isinstance(c, dict) else None
+            if page:
+                parts.append(f"page {page}")
+            if cid and not page:
+                # if page not available, at least include a short chunk id hint (first 8 chars)
+                parts.append(f"chunk {str(cid)[:8]}")
+            if not parts:
+                parts.append("unknown location")
+            lines.append(f"[p{i}] {', '.join(parts)}")
+        answer_text = answer_text + "\n" + "\n".join(lines)
+
+    return answer_text
 

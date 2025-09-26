@@ -1,6 +1,6 @@
 from typing import Iterator, Tuple
 from pathlib import Path
-from pypdf import PdfReader
+from pypdf import PdfReader, errors as pypdf_errors
 from docx import Document as DocxDocument
 
 def iter_txt_pages(path: Path, target_chars: int = 2500) -> Iterator[Tuple[int, str]]:
@@ -13,7 +13,12 @@ def iter_txt_pages(path: Path, target_chars: int = 2500) -> Iterator[Tuple[int, 
             page += 1
 
 def iter_pdf_pages(path: Path) -> Iterator[Tuple[int, str]]:
-    reader = PdfReader(str(path))
+    try:
+        reader = PdfReader(str(path))
+    except Exception as e:
+        # Corrupted or unsupported PDF - log and skip
+        print(f"⚠️ Skipping PDF {path}: {e}")
+        return
     for i, page in enumerate(reader.pages, 1):
         txt = ""
         try:
