@@ -1,7 +1,0 @@
-This is a sample text document for testing the RAG system.
-
-It contains multiple paragraphs to test the chunking functionality.
-
-The system should be able to extract this text and create embeddings for search and summarization.
-
-This is page 1 content that should be processed by the AI system.

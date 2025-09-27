@@ -1,7 +1,0 @@
-Test document in nested folder structure.
-
-Path: nested/folder/deep/document3.txt
-
-This tests multiple levels of folder nesting.
-
-The RAG system should preserve this folder structure and display it in the frontend.
