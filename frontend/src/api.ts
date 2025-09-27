@@ -4,7 +4,7 @@ const API_BASE_URL = 'http://127.0.0.1:8000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 120000, // 2 minutes timeout for uploads
+  timeout: 300000, // 5 minutes timeout for all requests
   headers: {
     'Content-Type': 'application/json',
   },
@@ -70,9 +70,9 @@ export const apiService = {
     const formData = new FormData();
     formData.append('file', file);
     
-    // Use extended timeout for upload processing
+    // Use extended timeout for upload processing - 10 minutes for large files
     const response = await api.post('/upload-zip', formData, {
-      timeout: 180000, // 3 minutes for upload processing
+      timeout: 600000, // 10 minutes for upload processing
       headers: {
         'Content-Type': 'multipart/form-data',
       },

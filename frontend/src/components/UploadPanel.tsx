@@ -57,11 +57,13 @@ export function UploadPanel({ onUploadSuccess, isLoading, setIsLoading, setError
       
       // Handle different types of errors
       if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-        setError('Upload is taking longer than expected. The file may still be processing. Please check your documents in a few minutes.');
+        setError('Upload is taking longer than expected (10+ minutes). For very large files, this may indicate the file contains many documents. Please try with a smaller ZIP file or contact support if the issue persists.');
       } else if (error.response?.status === 413) {
         setError('File is too large. Maximum size is 500MB.');
       } else if (error.response?.status === 400) {
-        setError(error.response?.data?.detail || 'Invalid file format. Please upload a ZIP file.');
+        setError(error.response?.data?.detail || 'Invalid file format. Please upload a ZIP file containing PDF, DOCX, or TXT files.');
+      } else if (error.response?.status === 500) {
+        setError('Server processing error: ' + (error.response?.data?.detail || 'Internal server error. Please try again.'));
       } else {
         setError(error.response?.data?.detail || 'Failed to upload file. Please try again.');
       }
@@ -99,7 +101,9 @@ export function UploadPanel({ onUploadSuccess, isLoading, setIsLoading, setError
           {isLoading ? (
             <div className="flex flex-col items-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mb-4"></div>
-              <p className="text-sm text-gray-600">Processing your documents...</p>
+              <p className="text-sm text-gray-600 mb-2">Processing your documents...</p>
+              <p className="text-xs text-gray-500">This may take several minutes for large files with many documents.</p>
+              <p className="text-xs text-gray-500">Please be patient while we extract, filter, and index your content.</p>
             </div>
           ) : (
             <>
