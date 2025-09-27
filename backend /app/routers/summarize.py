@@ -7,9 +7,13 @@ router = APIRouter(prefix="", tags=["summarize"])
 
 @router.get("/summarize-page/{chunk_id}", response_model=SummarizeResponse)
 def summarize_page(chunk_id: str):
-    row = supabase.table("doc_chunks") \
-        .select("doc_id, page_number, content") \
-        .eq("id", chunk_id).single().execute().data
+    try:
+        res = supabase.table("doc_chunks") \
+            .select("doc_id, page_number, content") \
+            .eq("id", chunk_id).single().execute()
+        row = res.data
+    except Exception:
+        row = None
     if not row:
         raise HTTPException(status_code=404, detail="Chunk not found")
     title = row["content"].get("title") or f"Page {row['page_number']}"

@@ -1,7 +1,10 @@
-import React from 'react';
+// React import not required with the new JSX transform
 import { ChevronLeft, ChevronRight, FileText, Upload } from 'lucide-react';
 import { Document } from '../App';
 import { SearchResponse } from '../api';
+import { apiService } from '../api';
+import { useEffect, useState } from 'react';
+import { FolderBrowser } from './FolderBrowser';
 
 interface DocumentViewerProps {
   document: Document;
@@ -18,6 +21,71 @@ export function DocumentViewer({
   onPageSelect,
   onNewUpload,
 }: DocumentViewerProps) {
+  const [originalText, setOriginalText] = useState<string | null>(null);
+  const [loadingOriginal, setLoadingOriginal] = useState(false);
+  const [pageTitles, setPageTitles] = useState<Record<string, string>>({});
+  const [pageTexts, setPageTexts] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    // Fetch the original chunk text whenever selectedPage changes
+    let cancelled = false;
+    async function fetchOriginal() {
+      setOriginalText(null);
+      if (!selectedPage) return;
+      const pageInfo = document.pages.find(p => p.page_number === selectedPage);
+      if (!pageInfo) return;
+      // If we already have the text cached from bulk fetch, use it
+      if (pageTexts[pageInfo.chunk_id]) {
+        setOriginalText(pageTexts[pageInfo.chunk_id]);
+        return;
+      }
+      setLoadingOriginal(true);
+      try {
+        const chunk = await apiService.getChunk(pageInfo.chunk_id);
+        if (!cancelled) setOriginalText(chunk.text || null);
+        if (chunk.text) {
+          setPageTexts(prev => ({ ...prev, [pageInfo.chunk_id]: String(chunk.text) }));
+        }
+        if (chunk.title) {
+          setPageTitles(prev => ({ ...prev, [pageInfo.chunk_id]: String(chunk.title) }));
+        }
+      } catch (e) {
+        console.error('Failed to fetch chunk text', e);
+        if (!cancelled) setOriginalText(null);
+      } finally {
+        if (!cancelled) setLoadingOriginal(false);
+      }
+    }
+    fetchOriginal();
+    return () => { cancelled = true; };
+  }, [selectedPage, document.pages]);
+
+  // Prefetch titles/text for all pages when document changes
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchAll() {
+      const promises = document.pages.map(async (p) => {
+        try {
+          const chunk = await apiService.getChunk(p.chunk_id);
+          return { id: p.chunk_id, title: chunk.title, text: chunk.text };
+        } catch (e) {
+          return { id: p.chunk_id, title: undefined, text: undefined };
+        }
+      });
+      const results = await Promise.all(promises);
+      if (cancelled) return;
+      const titles: Record<string, string> = {};
+      const texts: Record<string, string> = {};
+      results.forEach(r => {
+        if (r.title) titles[r.id] = String(r.title);
+        if (r.text) texts[r.id] = String(r.text);
+      });
+      setPageTitles(prev => ({ ...prev, ...titles }));
+      setPageTexts(prev => ({ ...prev, ...texts }));
+    }
+    fetchAll();
+    return () => { cancelled = true; };
+  }, [document]);
   const currentPage = document.pages.find(p => p.page_number === selectedPage);
   const sortedPages = document.pages.sort((a, b) => a.page_number - b.page_number);
   const currentIndex = sortedPages.findIndex(p => p.page_number === selectedPage);
@@ -89,8 +157,16 @@ export function DocumentViewer({
 
     return (
       <div className="text-sm text-gray-600">
-        <p>No content preview available for this page.</p>
-        <p className="mt-2">Use the search function to find relevant content in your documents.</p>
+        {loadingOriginal ? (
+          <p>Loading page content...</p>
+        ) : originalText ? (
+          <div className="whitespace-pre-wrap text-sm text-gray-700 leading-relaxed">{originalText}</div>
+        ) : (
+          <>
+            <p>No content preview available for this page.</p>
+            <p className="mt-2">Use the search function to find relevant content in your documents.</p>
+          </>
+        )}
       </div>
     );
   };
@@ -131,7 +207,7 @@ export function DocumentViewer({
           <div className="flex items-center space-x-2">
             <FileText className="w-4 h-4 text-gray-400" />
             <span className="text-sm font-medium text-gray-700">
-              {currentPage ? currentPage.title : 'Select a page'}
+              {currentPage ? (pageTitles[currentPage.chunk_id] || currentPage.title || 'Select a page') : 'Select a page'}
             </span>
           </div>
 
@@ -153,79 +229,12 @@ export function DocumentViewer({
             {getPageContent()}
           </div>
         ) : (
-          <div className="p-4">
-            <h4 className="text-sm font-medium text-gray-900 mb-3">Documents by Folder:</h4>
-            {(() => {
-              // Group pages by folder structure
-              const folderGroups: Record<string, typeof sortedPages> = {};
-              
-              sortedPages.forEach(page => {
-                const pathParts = page.source_path.split('/');
-                const folder = pathParts.length > 1 ? pathParts.slice(0, -1).join('/') : 'Root';
-                
-                if (!folderGroups[folder]) {
-                  folderGroups[folder] = [];
-                }
-                folderGroups[folder].push(page);
-              });
-
-              // Sort folder groups
-              const sortedFolders = Object.keys(folderGroups).sort();
-
-              return (
-                <div className="space-y-4">
-                  {sortedFolders.map(folder => (
-                    <div key={folder} className="border border-gray-200 rounded-lg overflow-hidden">
-                      <div className="bg-gray-50 px-3 py-2 border-b border-gray-200">
-                        <h5 className="text-sm font-medium text-gray-700 flex items-center">
-                          <FileText className="w-4 h-4 mr-2" />
-                          {folder === 'Root' ? '📁 Root Directory' : `📁 ${folder}`}
-                          <span className="ml-auto text-xs text-gray-500">
-                            {folderGroups[folder].length} pages
-                          </span>
-                        </h5>
-                      </div>
-                      <div className="divide-y divide-gray-100">
-                        {folderGroups[folder]
-                          .sort((a, b) => {
-                            // First sort by file name, then by page number
-                            const fileA = a.source_path.split('/').pop() || '';
-                            const fileB = b.source_path.split('/').pop() || '';
-                            if (fileA !== fileB) return fileA.localeCompare(fileB);
-                            return a.page_number - b.page_number;
-                          })
-                          .map((page) => {
-                            const fileName = page.source_path.split('/').pop() || '';
-                            return (
-                              <button
-                                key={page.chunk_id}
-                                onClick={() => onPageSelect(page.page_number)}
-                                className="w-full text-left p-3 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-inset transition-colors"
-                              >
-                                <div className="flex items-start justify-between">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center">
-                                      <span className="text-sm font-medium text-gray-900 mr-2">
-                                        {fileName}
-                                      </span>
-                                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                                        Page {page.page_number}
-                                      </span>
-                                    </div>
-                                    <p className="text-sm text-gray-600 mt-1 truncate">{page.title}</p>
-                                  </div>
-                                  <FileText className="w-4 h-4 text-gray-400 ml-2 flex-shrink-0" />
-                                </div>
-                              </button>
-                            );
-                          })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
-          </div>
+          <FolderBrowser 
+            pages={sortedPages}
+            selectedPage={selectedPage}
+            onPageSelect={onPageSelect}
+            pageTitles={pageTitles}
+          />
         )}
       </div>
     </div>

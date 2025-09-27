@@ -1,0 +1,22 @@
+🎯 RAG Document Intelligence Frontend
+==================================
+✅ Node.js version: v24.3.0
+✅ npm version: 11.4.2
+
+🚀 Starting development server...
+Frontend will be available at: http://localhost:5173
+Make sure the backend is running at: http://127.0.0.1:8000
+Press Ctrl+C to stop the server
+
+
+> rag-frontend@0.0.0 dev
+> vite
+
+Port 5173 is in use, trying another one...
+Port 5174 is in use, trying another one...
+
+  VITE v5.4.20  ready in 179 ms
+
+  ➜  Local:   http://localhost:5175/
+  ➜  Network: http://192.168.100.61:5175/
+  ➜  press h + enter to show help

@@ -1,4 +1,4 @@
-import React from 'react';
+// React import not required with the new JSX transform
 import { Search, ChevronRight } from 'lucide-react';
 import { SearchResponse } from '../api';
 
@@ -63,7 +63,7 @@ export function SearchResults({ results, onPageSelect }: SearchResultsProps) {
             Search Results ({results.hits.length} matches)
           </h4>
           <div className="space-y-3">
-            {results.hits.map((hit, index) => (
+            {results.hits.map((hit, _index) => (
               <div
                 key={hit.chunk_id}
                 className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"

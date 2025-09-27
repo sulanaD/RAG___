@@ -52,6 +52,14 @@ export interface SummarizeResponse {
   source_pages: number;
 }
 
+export interface ChunkResponse {
+  doc_id?: string;
+  chunk_id?: string;
+  page_number?: number;
+  title?: string;
+  text: string;
+}
+
 export const apiService = {
   // Upload ZIP file
   async uploadZip(file: File): Promise<UploadResponse> {
@@ -73,6 +81,12 @@ export const apiService = {
   // Summarize page
   async summarizePage(chunkId: string): Promise<SummarizeResponse> {
     const response = await api.get(`/summarize-page/${chunkId}`);
+    return response.data;
+  },
+
+  // Fetch original chunk content
+  async getChunk(chunkId: string): Promise<ChunkResponse> {
+    const response = await api.get(`/chunk/${chunkId}`);
     return response.data;
   },
 

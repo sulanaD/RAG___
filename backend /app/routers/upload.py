@@ -19,7 +19,16 @@ async def upload_zip(file: UploadFile = File(...)):
         tempd = Path(td)
         data = await file.read()
         extracted = extract_zip_recursive(data, tempd / "unzipped")
-        allowed = [p for p in extracted if p.suffix.lower() in ALLOWED]
+        # Filter out macOS metadata files and folders
+        filtered = []
+        for p in extracted:
+            path_str = str(p)
+            # Skip __MACOSX folders and ._* metadata files
+            if '__MACOSX' in path_str or p.name.startswith('._'):
+                continue
+            if p.suffix.lower() in ALLOWED:
+                filtered.append(p)
+        allowed = filtered
         if not allowed:
             raise HTTPException(status_code=400, detail="No supported files found in zip")
 
@@ -30,13 +39,30 @@ async def upload_zip(file: UploadFile = File(...)):
         texts_for_embedding, slots = [], []
 
         for path in allowed:
+            # Extract folder structure for better titles
+            relative_path = path.relative_to(tempd)
+            folder_parts = relative_path.parent.parts[1:]  # Skip 'unzipped'
+            folder_name = folder_parts[-1] if folder_parts else None
+            
             for page_num, page_text in iter_pages_for_file(path):
-                title = gen_title(page_text)
+                # Generate title with folder context
+                if folder_name and folder_name != 'unzipped':
+                    title = gen_title(page_text, folder_context=folder_name)
+                else:
+                    title = gen_title(page_text)
+                
+                # Include folder info in page metadata
+                page_meta = {
+                    "folder_path": "/".join(folder_parts) if folder_parts else "",
+                    "filename": path.name,
+                    "file_type": path.suffix.lower()
+                }
+                
                 staged_rows.append({
                     "doc_id": doc_id,
-                    "source_path": str(path.relative_to(tempd)),
+                    "source_path": str(relative_path),
                     "page_number": int(page_num),
-                    "content": {"title": title, "text": page_text, "page_meta": {}},
+                    "content": {"title": title, "text": page_text, "page_meta": page_meta},
                     "embedding": None
                 })
                 texts_for_embedding.append(page_text)
@@ -55,14 +81,14 @@ async def upload_zip(file: UploadFile = File(...)):
 
         # Retrieve the processed chunks from Supabase
         q = supabase.table(CHUNKS_TABLE) \
-            .select("id, source_path, page_number, content->>title") \
+            .select("id, source_path, page_number, content") \
             .eq("doc_id", doc_id).order("page_number", desc=False).execute()
         
         pages_index = [{
             "chunk_id": r["id"],
             "source_path": r["source_path"],
             "page_number": int(r["page_number"]),
-            "title": r.get("content->>title") or "Untitled"
+            "title": (r.get("content") or {}).get("title") or "Untitled"
         } for r in (q.data or [])]
 
         return UploadZipResponse(

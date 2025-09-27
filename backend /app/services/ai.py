@@ -22,10 +22,13 @@ def embed(texts: List[str]) -> List[List[float]]:
         random.seed(42)  # Consistent seed for reproducible results
         return [[random.random() for _ in range(1536)] for _ in texts]
 
-def gen_title(page_text: str) -> str:
+def gen_title(page_text: str, folder_context: str = None) -> str:
     if HAS_REAL_API_KEY and client:
         # Keep the prompt small to reduce token usage: take the first 1200 chars
-        sys = "Return only a concise factual title (<= 10 words). No extra text. Reply with the title only."
+        if folder_context:
+            sys = f"Return only a concise factual title (<= 10 words) for content from folder '{folder_context}'. No extra text. Reply with the title only."
+        else:
+            sys = "Return only a concise factual title (<= 10 words). No extra text. Reply with the title only."
         prompt_text = page_text.strip()[:1200]
         try:
             r = client.chat.completions.create(
@@ -44,13 +47,17 @@ def gen_title(page_text: str) -> str:
             # Log the error and fall back to mock title to avoid crashing and to limit retries
             print(f"⚠️ OpenAI title generation failed: {e}")
             # Fall through to mock below
+    
+    # Mock title generation based on first words and folder context
+    words = page_text.strip().split()[:6]
+    if not words:
+        return f"{folder_context} - Untitled" if folder_context else "Untitled Document"
+    
+    base_title = " ".join(words).replace('\n', ' ')[:40]
+    if folder_context:
+        return f"{folder_context}: {base_title}..." if len(base_title) == 40 else f"{folder_context}: {base_title}"
     else:
-        # Mock title generation based on first words
-        words = page_text.strip().split()[:8]
-        if not words:
-            return "Untitled Document"
-        title = " ".join(words).replace('\n', ' ')[:50]
-        return f"{title}..." if len(title) == 50 else title
+        return f"{base_title}..." if len(base_title) == 40 else base_title
 
 def page_summary(title: str, text: str, target_words: int = 140) -> str:
     if HAS_REAL_API_KEY and client:
@@ -92,16 +99,16 @@ def rag_answer(query: str, context_chunks: List[str], citations: List[dict] | No
         sys = ("Answer using only the provided context. Cite with [p1], [p2] in order. "
                "If information is insufficient, say you don't know.")
         ctx = "".join(f"[p{i}] {t}\n\n" for i, t in enumerate(context_chunks, 1))
-        r = client.chat.completions.create(
-            model=OPENAI_MODEL_RAG,
-            messages=[{"role":"system","content":sys},
-                      {"role":"user","content":f"Question: {query}\n\nContext:\n{ctx}"}],
-            temperature=0.0
-        )
-        # Defensive parsing
         try:
+            r = client.chat.completions.create(
+                model=OPENAI_MODEL_RAG,
+                messages=[{"role":"system","content":sys},
+                          {"role":"user","content":f"Question: {query}\n\nContext:\n{ctx}"}],
+                temperature=0.0
+            )
+            # Defensive parsing
             answer_text = getattr(r.choices[0].message, "content", None) or getattr(r.choices[0], "text", None)
-        except Exception:
+        except Exception as e:
             answer_text = None
 
     # Mock or fallback

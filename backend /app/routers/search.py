@@ -7,6 +7,27 @@ from app.models.schemas import SearchRequest, SearchResponse, SearchHit
 
 router = APIRouter(prefix="", tags=["search"])
 
+
+@router.get("/chunk/{chunk_id}")
+def get_chunk(chunk_id: str):
+    # Return doc_chunks.content for a single chunk id
+    try:
+        res = supabase.table("doc_chunks").select("doc_id, page_number, content, id").eq("id", chunk_id).single().execute()
+        full = res.data
+    except Exception:
+        # supabase .single() can raise when no rows are found depending on the client; treat as not found
+        full = None
+    if not full:
+        raise HTTPException(status_code=404, detail="Chunk not found")
+    # content is expected to be a JSON object with at least 'text' and optionally 'title'
+    return {
+        "doc_id": full.get("doc_id"),
+        "chunk_id": full.get("id"),
+        "page_number": int(full.get("page_number") or 0),
+        "title": (full.get("content") or {}).get("title"),
+        "text": (full.get("content") or {}).get("text", ""),
+    }
+
 @router.post("/search", response_model=SearchResponse)
 def semantic_search(req: SearchRequest):
     scope = (req.scope or "document").lower()
@@ -15,12 +36,38 @@ def semantic_search(req: SearchRequest):
     if scope == "page":
         if not req.selected_chunk_id:
             raise HTTPException(status_code=400, detail="selected_chunk_id required when scope='page'")
-        full = supabase.table("doc_chunks").select("doc_id, page_number, content, id") \
-            .eq("id", req.selected_chunk_id).single().execute().data
+        try:
+            res = supabase.table("doc_chunks").select("doc_id, page_number, content, id") \
+                .eq("id", req.selected_chunk_id).single().execute()
+            full = res.data
+        except Exception:
+            full = None
         if not full:
             raise HTTPException(status_code=404, detail="Chunk not found")
         text = full["content"]["text"]
-        answer = rag_answer(req.query, [text])
+        
+        # Generate highlights for page-scoped search
+        terms = [t for t in re.split(r"[\s,.;:?]+", req.query) if len(t) >= 3]
+        hl = []
+        if text and terms:
+            lower_text = text.lower()
+            for term in terms:
+                term_lower = term.lower()
+                start_pos = 0
+                while start_pos < len(lower_text):
+                    pos = lower_text.find(term_lower, start_pos)
+                    if pos == -1:
+                        break
+                    hl.append({"start": pos, "end": pos + len(term)})
+                    start_pos = pos + 1
+                    if len(hl) >= 10:  # Limit total highlights
+                        break
+                if len(hl) >= 10:
+                    break
+        
+        # Build citations for page-scoped search
+        citations = [{"page_number": full["page_number"], "chunk_id": full["id"]}]
+        answer = rag_answer(req.query, [text], citations=citations)
         hit = SearchHit(
             chunk_id=full["id"],
             doc_id=full["doc_id"],
@@ -28,7 +75,7 @@ def semantic_search(req: SearchRequest):
             title=full["content"].get("title") or "Untitled",
             snippet=text[:800],
             similarity=1.0,
-            highlights=None
+            highlights=hl or None
         )
         return SearchResponse(answer=answer, hits=[hit])
 
@@ -58,10 +105,20 @@ def semantic_search(req: SearchRequest):
         # Fetch the full content for this chunk to extract text/title safely
         full = None
         if rid:
-            full = supabase.table("doc_chunks").select("content").eq("id", rid).single().execute().data
+            try:
+                res = supabase.table("doc_chunks").select("content").eq("id", rid).single().execute()
+                full = res.data
+            except Exception:
+                # If single() fails, try limit(1) instead
+                try:
+                    res = supabase.table("doc_chunks").select("content").eq("id", rid).limit(1).execute()
+                    full = res.data[0] if res.data else None
+                except Exception:
+                    full = None
         else:
             # as a last resort, if RPC returned nested content already, try to use it directly
             full = r.get("content") and {"content": r.get("content")}
+        
         text = ""
         title = None
         if full and full.get("content"):
@@ -70,14 +127,24 @@ def semantic_search(req: SearchRequest):
             title = content.get("title")
         contexts.append(text)
 
-        # rudimentary highlights
-        hl, lower = [], text.lower()
-        for t in terms:
-            pos = lower.find(t.lower())
-            if pos != -1:
-                hl.append({"start": pos, "end": pos + len(t)})
-            if len(hl) >= 5:
-                break
+        # Enhanced highlights - fix the logic
+        hl = []
+        if text and terms:
+            lower_text = text.lower()
+            for term in terms:
+                term_lower = term.lower()
+                start_pos = 0
+                # Find all occurrences of this term
+                while start_pos < len(lower_text):
+                    pos = lower_text.find(term_lower, start_pos)
+                    if pos == -1:
+                        break
+                    hl.append({"start": pos, "end": pos + len(term)})
+                    start_pos = pos + 1
+                    if len(hl) >= 10:  # Limit total highlights
+                        break
+                if len(hl) >= 10:
+                    break
 
         # Safely coerce similarity to float if present
         sim = r.get("similarity") or r.get("score") or r.get("cosine") or 0.0

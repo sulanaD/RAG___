@@ -83,6 +83,7 @@ def update_page_count(doc_id: str, page_count: int) -> None:
 
 def insert_chunks(rows: List[dict]) -> None:
     # rows: {doc_id, source_path, page_number, content, embedding}
+    # Supabase should handle the conversion from Python list to PostgreSQL VECTOR automatically
     r = supabase.table(CHUNKS_TABLE).insert(rows).execute()
     data = getattr(r, "data", None)
     if data is None:

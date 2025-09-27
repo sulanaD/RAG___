@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { UploadPanel } from './components/UploadPanel';
 import { ActionPanel } from './components/ActionPanel';
 import { DocumentViewer } from './components/DocumentViewer';

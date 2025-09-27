@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Search, FileText, Loader2 } from 'lucide-react';
 import { apiService, SearchRequest, SearchResponse, SummarizeResponse } from '../api';
 import { Document } from '../App';
