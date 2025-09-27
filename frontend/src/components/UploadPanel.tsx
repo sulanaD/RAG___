@@ -54,7 +54,17 @@ export function UploadPanel({ onUploadSuccess, isLoading, setIsLoading, setError
       onUploadSuccess(response);
     } catch (error: any) {
       console.error('Upload error:', error);
-      setError(error.response?.data?.detail || 'Failed to upload file. Please try again.');
+      
+      // Handle different types of errors
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        setError('Upload is taking longer than expected. The file may still be processing. Please check your documents in a few minutes.');
+      } else if (error.response?.status === 413) {
+        setError('File is too large. Maximum size is 500MB.');
+      } else if (error.response?.status === 400) {
+        setError(error.response?.data?.detail || 'Invalid file format. Please upload a ZIP file.');
+      } else {
+        setError(error.response?.data?.detail || 'Failed to upload file. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }

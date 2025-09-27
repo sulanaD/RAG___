@@ -4,6 +4,10 @@ const API_BASE_URL = 'http://127.0.0.1:8000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 120000, // 2 minutes timeout for uploads
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
 export interface UploadResponse {
@@ -66,8 +70,13 @@ export const apiService = {
     const formData = new FormData();
     formData.append('file', file);
     
-    // Let the browser set the Content-Type (including multipart boundary)
-    const response = await api.post('/upload-zip', formData);
+    // Use extended timeout for upload processing
+    const response = await api.post('/upload-zip', formData, {
+      timeout: 180000, // 3 minutes for upload processing
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     
     return response.data;
   },

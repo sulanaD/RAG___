@@ -14,6 +14,31 @@ else:
     print("⚠️  Using mock AI services - no valid OpenAI API key detected")
 
 def embed(texts: List[str]) -> List[List[float]]:
+    # OpenAI embeddings API has a limit of ~8000 tokens per request
+    # Split large batches to avoid hitting token limits
+    if len(texts) > 50:  # Conservative batch size
+        print(f"⚠️  Large batch ({len(texts)} texts) - splitting into smaller batches to avoid token limits")
+        
+        all_embeddings = []
+        batch_size = 50
+        
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            print(f"🔄 Processing batch {i//batch_size + 1}/{(len(texts)-1)//batch_size + 1} ({len(batch)} texts)")
+            
+            if HAS_REAL_API_KEY and client:
+                r = client.embeddings.create(model=OPENAI_EMBED_MODEL, input=batch)
+                batch_embeddings = [d.embedding for d in r.data]
+            else:
+                # Mock embeddings for testing
+                random.seed(42 + i)  # Different seed per batch
+                batch_embeddings = [[random.random() for _ in range(1536)] for _ in batch]
+            
+            all_embeddings.extend(batch_embeddings)
+        
+        return all_embeddings
+    
+    # For smaller batches, process normally
     if HAS_REAL_API_KEY and client:
         r = client.embeddings.create(model=OPENAI_EMBED_MODEL, input=texts)
         return [d.embedding for d in r.data]
