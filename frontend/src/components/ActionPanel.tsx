@@ -41,6 +41,7 @@ export function ActionPanel({
         query: searchQuery.trim(),
         top_k: 6,
         scope: searchScope,
+        // Always include doc_id for document-scoped search to avoid cross-document issues
         doc_id: document.id,
       };
 
@@ -48,10 +49,16 @@ export function ActionPanel({
         const pageInfo = document.pages.find(p => p.page_number === selectedPage);
         if (pageInfo) {
           request.selected_chunk_id = pageInfo.chunk_id;
+        } else {
+          setError('Please select a valid page for page-scoped search.');
+          setIsLoading(false);
+          return;
         }
       }
 
+      console.log('Search request:', request); // Debug logging
       const results = await apiService.search(request);
+      console.log('Search results:', results); // Debug logging
       onSearchResults(results);
     } catch (error: any) {
       console.error('Search error:', error);

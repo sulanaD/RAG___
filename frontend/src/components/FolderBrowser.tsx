@@ -204,9 +204,8 @@ export function FolderBrowser({ pages, selectedPage, onPageSelect, pageTitles }:
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h4 className="text-sm font-medium text-gray-900">Document Structure</h4>
+      <div className="p-3">
+        <div className="mb-2 flex items-center justify-between">
           <button
             onClick={() => {
               // Expand all folders
@@ -228,17 +227,11 @@ export function FolderBrowser({ pages, selectedPage, onPageSelect, pageTitles }:
           {renderFolderNode(folderTree)}
         </div>
         
-        {/* Summary Stats */}
-        <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-          <div className="text-xs text-gray-600">
-            <div className="flex justify-between">
-              <span>Total Pages:</span>
-              <span className="font-medium">{pages.length}</span>
-            </div>
-            <div className="flex justify-between mt-1">
-              <span>Folders:</span>
-              <span className="font-medium">{folderTree.children.length}</span>
-            </div>
+        {/* Compact Summary Stats */}
+        <div className="mt-3 p-2 bg-gray-50 rounded text-xs text-gray-600">
+          <div className="flex justify-between">
+            <span>Pages: {pages.length}</span>
+            <span>Folders: {folderTree.children.length}</span>
           </div>
         </div>
       </div>

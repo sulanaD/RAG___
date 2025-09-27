@@ -222,20 +222,40 @@ export function DocumentViewer({
         </div>
       </div>
 
-      {/* Page List */}
-      <div className="flex-1 overflow-y-auto">
-        {selectedPage ? (
-          <div className="p-4">
-            {getPageContent()}
+      {/* Content Area */}
+      <div className="flex-1 overflow-hidden flex">
+        {/* Left Side - Folder Browser (always visible) */}
+        <div className="w-1/2 border-r border-gray-200 flex flex-col">
+          <div className="p-3 border-b border-gray-200 bg-gray-50">
+            <h4 className="text-sm font-medium text-gray-900">Document Structure</h4>
           </div>
-        ) : (
           <FolderBrowser 
             pages={sortedPages}
             selectedPage={selectedPage}
             onPageSelect={onPageSelect}
             pageTitles={pageTitles}
           />
-        )}
+        </div>
+
+        {/* Right Side - Page Content */}
+        <div className="w-1/2 flex flex-col">
+          <div className="p-3 border-b border-gray-200 bg-gray-50">
+            <h4 className="text-sm font-medium text-gray-900">Page Content</h4>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            {selectedPage ? (
+              getPageContent()
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-500">
+                <div className="text-center">
+                  <FileText className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                  <p className="text-lg font-medium">Select a page to view content</p>
+                  <p className="text-sm mt-2">Choose a page from the folder structure on the left</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
