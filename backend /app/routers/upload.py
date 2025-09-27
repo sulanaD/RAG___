@@ -6,6 +6,7 @@ from app.services.utils_zip import extract_zip_recursive
 from app.services.parsing import iter_pages_for_file
 from app.services.ai import embed, gen_title
 from app.models.schemas import UploadZipResponse
+from app.config import MAX_FILE_SIZE
 
 router = APIRouter(prefix="", tags=["upload"])
 ALLOWED = {".pdf", ".docx", ".txt"}
@@ -14,6 +15,14 @@ ALLOWED = {".pdf", ".docx", ".txt"}
 async def upload_zip(file: UploadFile = File(...)):
     if not file.filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="Please upload a .zip")
+    
+    # Check file size
+    if file.size and file.size > MAX_FILE_SIZE:
+        max_mb = MAX_FILE_SIZE // (1024 * 1024)
+        raise HTTPException(
+            status_code=413, 
+            detail=f"File too large. Maximum size allowed is {max_mb}MB"
+        )
 
     with tempfile.TemporaryDirectory() as td:
         tempd = Path(td)

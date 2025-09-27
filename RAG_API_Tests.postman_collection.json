@@ -1,0 +1,349 @@
+{
+  "info": {
+    "name": "RAG Web API Collection",
+    "description": "Complete API test collection for the RAG Web Application",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "doc_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "chunk_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Upload ZIP File",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "/path/to/your/test.zip",
+              "description": "Select a ZIP file containing documents (PDF, DOCX, TXT)"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/upload-zip",
+          "host": ["{{base_url}}"],
+          "path": ["upload-zip"]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// Extract doc_id from response for use in other requests",
+              "if (pm.response.code === 200) {",
+              "    const response = pm.response.json();",
+              "    pm.collectionVariables.set('doc_id', response.doc_id);",
+              "    ",
+              "    // Extract first chunk_id if available",
+              "    if (response.pages_index && response.pages_index.length > 0) {",
+              "        pm.collectionVariables.set('chunk_id', response.pages_index[0].chunk_id);",
+              "    }",
+              "    ",
+              "    pm.test('Upload successful', function () {",
+              "        pm.expect(response.doc_id).to.be.a('string');",
+              "        pm.expect(response.file_count).to.be.a('number');",
+              "        pm.expect(response.page_count).to.be.a('number');",
+              "    });",
+              "}",
+              "",
+              "pm.test('Response time is less than 30s', function () {",
+              "    pm.expect(pm.response.responseTime).to.be.below(30000);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "List Documents",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/documents",
+          "host": ["{{base_url}}"],
+          "path": ["documents"]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response is an array', function () {",
+              "    const response = pm.response.json();",
+              "    pm.expect(response).to.be.an('array');",
+              "});",
+              "",
+              "pm.test('Documents have required fields', function () {",
+              "    const response = pm.response.json();",
+              "    if (response.length > 0) {",
+              "        const doc = response[0];",
+              "        pm.expect(doc).to.have.property('id');",
+              "        pm.expect(doc).to.have.property('name');",
+              "        pm.expect(doc).to.have.property('pages');",
+              "    }",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Search - Document Scope",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"technology innovation\",\n  \"top_k\": 5,\n  \"scope\": \"document\",\n  \"doc_id\": \"{{doc_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/search",
+          "host": ["{{base_url}}"],
+          "path": ["search"]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Search returns results', function () {",
+              "    pm.response.to.have.status(200);",
+              "    const response = pm.response.json();",
+              "    pm.expect(response).to.be.an('array');",
+              "});",
+              "",
+              "pm.test('Search results have required fields', function () {",
+              "    const response = pm.response.json();",
+              "    if (response.length > 0) {",
+              "        const result = response[0];",
+              "        pm.expect(result).to.have.property('score');",
+              "        pm.expect(result).to.have.property('content');",
+              "        pm.expect(result).to.have.property('source_path');",
+              "    }",
+              "});",
+              "",
+              "pm.test('Response time is reasonable', function () {",
+              "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Search - Page Scope",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"artificial intelligence\",\n  \"top_k\": 3,\n  \"scope\": \"page\",\n  \"doc_id\": \"{{doc_id}}\",\n  \"selected_chunk_id\": \"{{chunk_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/search",
+          "host": ["{{base_url}}"],
+          "path": ["search"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Search - Global Scope",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"machine learning\",\n  \"top_k\": 5,\n  \"scope\": \"global\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/search",
+          "host": ["{{base_url}}"],
+          "path": ["search"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Summarize - Document Scope",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"scope\": \"document\",\n  \"doc_id\": \"{{doc_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/summarize",
+          "host": ["{{base_url}}"],
+          "path": ["summarize"]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Summarization successful', function () {",
+              "    pm.response.to.have.status(200);",
+              "    const response = pm.response.json();",
+              "    pm.expect(response).to.have.property('summary');",
+              "    pm.expect(response.summary).to.be.a('string');",
+              "    pm.expect(response.summary.length).to.be.greaterThan(10);",
+              "});",
+              "",
+              "pm.test('Response time is reasonable', function () {",
+              "    pm.expect(pm.response.responseTime).to.be.below(30000);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Summarize - Page Scope",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"scope\": \"page\",\n  \"doc_id\": \"{{doc_id}}\",\n  \"selected_chunk_id\": \"{{chunk_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/summarize",
+          "host": ["{{base_url}}"],
+          "path": ["summarize"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Test File Size Limit",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "/path/to/large/test.zip",
+              "description": "Select a large ZIP file (>500MB) to test size limit"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/upload-zip",
+          "host": ["{{base_url}}"],
+          "path": ["upload-zip"]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('File size limit enforced', function () {",
+              "    if (pm.response.code === 413) {",
+              "        pm.expect(pm.response.json().detail).to.include('File too large');",
+              "    } else {",
+              "        pm.expect(pm.response.code).to.be.oneOf([200, 413]);",
+              "    }",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "// Set base URL if not already set",
+          "if (!pm.collectionVariables.get('base_url')) {",
+          "    pm.collectionVariables.set('base_url', 'http://localhost:8000');",
+          "}"
+        ],
+        "type": "text/javascript"
+      }
+    }
+  ]
+}

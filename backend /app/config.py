@@ -19,3 +19,7 @@ OPENAI_EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
 
 CORS_ORIGINS = _split_csv(os.getenv("CORS_ORIGINS", "*"))
 
+# File upload settings
+MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", "524288000"))  # 500MB in bytes
+MAX_REQUEST_SIZE = int(os.getenv("MAX_REQUEST_SIZE", "524288000"))  # 500MB in bytes
+

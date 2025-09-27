@@ -10,7 +10,7 @@ def _safe_join(base: Path, *paths: str) -> Path:
         raise ValueError("Unsafe path in archive")
     return final
 
-def extract_zip_recursive(zip_bytes: bytes, out_dir: Path, max_nested: int = 3) -> List[Path]:
+def extract_zip_recursive(zip_bytes: bytes, out_dir: Path, max_nested: int = 10) -> List[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # First level
